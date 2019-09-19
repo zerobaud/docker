@@ -1,0 +1,374 @@
+version: "2.4"
+services:
+ 
+# - Variables under environment: can be defined explicitly or referenced from a .env file.
+# - All services store persitent data on /mnt/tank/docker.  Modify volumes accordingly.
+# - Assumes /mnt/tank/docker set 0775, root:docker.
+# - Idea is for all containers to be reverse-proxied behind Traefik.
+#   - So either configure Traefik for LetsEncrypt validation via DNS provider, or
+#   - create specific internal DNS entries for each container (e.g., plex.domain.local) pointing
+#     to IP of docker host.
+#   - Internal wildcard DNS entry via dnsmasq could also be used, but lazy.
+
+  ###
+  ### SYSTEM MANAGEMENT CONTAINERS
+  ###
+  # Watchtower keeps all other containers current
+  watchtower:
+    container_name: watchtower
+    restart: unless-stopped
+    #image: v2tec/watchtower # project seems dead?
+    image: containrrr/watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    # Checks for new container images every day at 7AM (cron format)
+    command: --schedule "0 0 7 * * *" --cleanup
+    environment:
+      - TZ
+ 
+  # Web management for containers 
+  portainer:
+    image: portainer/portainer
+    container_name: portainer
+    restart: always
+    command: -H unix:///var/run/docker.sock
+    networks:
+      - traefik_proxy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${DOCKER_LOCATION}/portainer/data:/data
+      - ${DOCKER_LOCATION}/shared:/shared
+    environment:
+      - TZ
+      - PUID
+      - PGID
+    labels:
+      - traefik.enable=true
+      - traefik.backend=portainer
+      - traefik.frontend.rule=Host:portainer.${DOMAINNAME}  
+      - traefik.port=9000
+      - traefik.docker.network=traefik_proxy
+    
+  # Traefik for container reverse SSL proxy.
+  # All containers with an exposed web front-end are proxied through this
+  # container.  They need to be on the traefik_proxy network, with
+  # appropriate labels to enable them.
+  traefik:
+    container_name: traefik
+    # Should migrate to traefik 2.0, but config files totally different.
+    # Potential issues around dynamic LetsEncrypt cert generation.
+    # Maybe wait for another release or two.
+    image: traefik:v1.7.16-alpine
+    restart: always
+    domainname: ${DOMAINNAME}
+    ports:
+      - 80:80
+      - 443:443
+      - 8888:8080
+    networks:
+      - traefik_proxy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${DOCKER_LOCATION}/traefik:/etc/traefik
+      - ${DOCKER_LOCATION}/shared:/shared
+    environment:
+      - TZ
+      - PUID
+      - PGID
+      - NAMECHEAP_API_USER
+      - NAMECHEAP_API_KEY
+    labels:
+      - traefik.enable=true
+      - traefik.backend=traefik
+      - traefik.frontend.rule=Host:traefik.${DOMAINNAME}
+      - traefik.port=8080
+      - traefik.docker.network=traefik_proxy
+
+  # Duplicati for cloud backups of important data.
+  duplicati:
+    container_name: duplicati
+    image: linuxserver/duplicati
+    restart: always
+    networks:
+      - traefik_proxy
+    # First run:  Uncomment the ports definition below, SSH into into docker host with:
+    # ssh user@host -L 8200:localhost:8200, log into web UI on http://localhost:8200
+    # Modify Hostnames field to allow the duplicati container hostname (duplicati.${DOMAINNAME})
+    # Save, stop container, uncomment the lines below, restart.
+    #ports:
+    #  - 8200:8200
+    volumes:
+      - ${DOCKER_LOCATION}/duplicati:/config
+      - /home:/source
+    environment:
+      - PUID
+      - PGID
+      - TZ
+    labels:
+      - traefik.enable=true
+      - traefik.backend=duplicati
+      - traefik.frontend.rule=Host:duplicati.${DOMAINNAME}
+      - traefik.port=8200
+      - traefik.docker.network=traefik_proxy
+  
+  ###
+  ### MEDIA SERVER CONTAINERS
+  ###
+  # Emby for media streaming
+  emby:
+    container_name: emby
+    image: emby/embyserver
+    restart: always
+    networks:
+      - traefik_proxy
+    volumes:
+      - ${DOCKER_LOCATION}/emby:/config
+      - /mnt/tank/media/tv:/mnt/tv
+      - /mnt/tank/media/movies:/mnt/movies
+    environment:
+      - TZ
+      - UID=${PUID}
+      - GID=${PGID}
+    labels:
+      - traefik.enable=true
+      - traefik.backend=emby
+      - traefik.frontend.rule=Host:emby.${DOMAINNAME}
+      #- traefik.port=8920
+      - traefik.port=8096
+      - traefik.docker.network=traefik_proxy
+      
+  # Sabnzbd for snatching usenet NZBs
+  sabnzbd:
+    container_name: sabnzbd
+    image: linuxserver/sabnzbd
+    restart: always
+    networks:
+      - traefik_proxy
+    volumes:
+      - ${DOCKER_LOCATION}/sabnzbd:/config
+      - ${DOCKER_LOCATION}/shared/downloads/complete:/downloads/complete
+      - ${DOCKER_LOCATION}/shared/downloads/incomplete:/downloads/incomplete
+    environment:
+      - TZ
+      - PUID
+      - PGID
+    labels:
+      - traefik.enable=true
+      - traefik.backend=sabnzbd
+      - traefik.frontend.rule=Host:sabnzbd.${DOMAINNAME}
+      - traefik.port=8080
+      - traefik.docker.network=traefik_proxy
+    
+  # Sonarr for TV series management
+  sonarr:
+    container_name: sonarr
+    image: linuxserver/sonarr
+    restart: always
+    networks:
+      - traefik_proxy
+    # Monitors the same directory as sabnzbd for completed downloads,
+    # moves them to same directory for Plex/Emby TV library.
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ${DOCKER_LOCATION}/sonarr:/config
+      - ${DOCKER_LOCATION}/shared/downloads:/downloads
+      - /mnt/tank/media/tv:/tv
+    environment:
+      - TZ
+      - PUID
+      - PGID
+    labels:
+      - traefik.enable=true
+      - traefik.backend=sonarr
+      - traefik.frontend.rule=Host:sonarr.${DOMAINNAME}
+      - traefik.port=8989
+      - traefik.docker.network=traefik_proxy
+      
+  ###
+  ### Network Management
+  ###
+  # UniFi AP management utility
+  unifi-controller:
+    container_name: unifi-controller
+    image: linuxserver/unifi-controller 
+    restart: always
+    networks:
+      - traefik_proxy
+    # Even though we're exposing the admin UI via Traefik, we still need direct
+    # exposure for other ports for communication with AP(s).
+    ports:
+      - 8443:8443/tcp
+      - 8080:8080/tcp
+      - 3478:3478/udp
+      - 10001:10001/udp
+      # Only needed for captive portal redirect
+      #- "8880:8880/tcp
+      #- "8843:8843/tcp
+      # Only needed for UniFi mobile speedtest
+      #- "6789:6789/tcp
+      # Only needed for controller L2 discoverable
+      #- "1900:1900/udp
+      # Only needed for local-bound database
+      #- "27117:27117/tcp
+      # ????
+      #- "8081:8081
+    volumes:
+      - ${DOCKER_LOCATION}/unifi-controller:/config
+    environment:
+      - TZ
+      - PUID
+      - PGID
+    labels:
+      - traefik.enable=true
+      - traefik.tags=frontend
+      - traefik.frontend.passHostHeader=true
+      - traefik.admin.backend=unifi-controller
+      - traefik.admin.frontend.rule=Host:unifi-controller.${DOMAINNAME}
+      - traefik.admin.port=8443
+      - traefik.admin.protocol=https
+      
+  # UniFi Video NVR
+  unifi-video:
+    container_name: unifi-video
+    image: pducharme/unifi-video-controller
+    restart: always
+    cap_add:
+      - SYS_ADMIN
+      - DAC_READ_SEARCH
+    security_opt:
+      - apparmor:unconfined
+    networks:
+      - traefik_proxy
+    # Even though we're exposing the admin UI via Traefik, other ports need
+    # direct exposure for camera and recording functionality.
+    ports:
+      # HTTP and HTTPS web UI
+      - 7080:7080/tcp
+      - 7443:7443/tcp
+      # Camera management (controller 3.8.0+)
+      - 7442:7442/tcp
+      # Video over HTTP
+      - 7445:7445/tcp
+      # Video over HTTPS
+      - 7446:7446/tcp
+      # RTSP via controller (perhaps unneeded)
+      - 7447:7447/tcp
+      # Inbound camera streams (NVR side)
+      - 6666:6666/tcp
+      # UVC-Micro audio talkback (Camera side, perhaps unneeded)
+      #- "7004:7004/udp
+    volumes:
+      - ${DOCKER_LOCATION}/unifi-video:/var/lib/unifi-video
+      - /mnt/tank/unifi-video:/videos
+    environment:
+      - TZ
+      - PUID
+      - PGID
+    labels:
+      - traefik.enable=true
+      - traefik.tags=frontend
+      - traefik.frontend.passHostHeader=true
+      - traefik.admin.backend=unifi-video
+      - traefik.admin.frontend.rule=Host:unifi-video.${DOMAINNAME}
+      - traefik.admin.port=7443
+      - traefik.admin.protocol=https
+      - traefik.liveview.port=7446
+      - traefik.liveview.protocol=https
+
+  # Ubiquiti UNMS for EdgeMAX management
+  unms:
+    image: nico640/docker-unms:latest
+    container_name: unms
+    restart: always
+    volumes:
+      - ${DOCKER_LOCATION}/unms:/config
+    networks:
+      - traefik_proxy
+    ports:
+      - 2055:2055/udp
+    environment:
+      #- PUID
+      #- PGID
+      - TZ
+    labels:
+      - traefik.enable=true
+      - traefik.tags=frontend
+      - traefik.frontend.passHostHeader=true
+      - traefik.admin.backend=unms
+      - traefik.admin.frontend.rule=Host:unms.${DOMAINNAME}
+      - traefik.admin.port=443
+      - traefik.admin.protocol=https
+        
+  # ddclient keeps our dynamic DNS up to date
+  ddclient:
+    image: linuxserver/ddclient
+    container_name: ddclient
+    restart: always
+    volumes:
+      - ${DOCKER_LOCATION}/ddclient:/config
+    environment:
+      - PUID
+      - PGID
+      - TZ
+      
+  # Homebridge for Homekit integration
+  homebridge:
+    image: oznu/homebridge
+    container_name: homebridge
+    restart: always
+    volumes:
+      - ${DOCKER_LOCATION}/homebridge:/homebridge
+    #network_mode: host
+    networks:
+      direct:
+        ipv4_address: 192.168.1.209
+    #networks:
+    #  - traefik_proxy
+    #ports:
+    #  - 5353:5353/tcp
+    #  - 51826:51826/tcp
+    environment:
+      - PUID
+      - PGID
+      - TZ
+      - HOMEBRIDGE_CONFIG_UI=1
+      - HOMEBRIDGE_CONFIG_UI_PORT=8180
+    #labels:
+    #  - traefik.enable=true
+    #  - traefik.tags=frontend
+    #  - traefik.frontend.passHostHeader=true
+    #  - traefik.admin.backend=unms
+    #  - traefik.admin.frontend.rule=Host:homebridge.${DOMAINNAME}
+    #  - traefik.admin.port=8080
+    #  - traefik.admin.protocol=http
+
+# Docker network definitions, other than default.
+networks:
+  
+  # Network for containers with exposed services (proxied through Traefik)
+  traefik_proxy:
+    driver: bridge
+    driver_opts:
+      # Set interface name on host to something meaningful
+      com.docker.network.bridge.name: docker_proxy
+  
+  # Network for exposing a direct IP to a container.
+  # Consider for containers that require host networking, or lots of exposed ports,
+  # to prevent port overlap.
+  direct:
+    #external: true  # network not created by docker-compose
+    driver: macvlan
+    driver_opts:
+      parent: enp0s31f6
+    ipam:
+      config:
+        - subnet: 192.168.1.0/24
+          gateway: 192.168.1.1
+          ip_range: 192.168.1.208/28
+
+  # Default docker bridge network
+  default:
+    driver: bridge
+    driver_opts:
+      # Set interface name on host to something meaningful
+      com.docker.network.bridge.name: docker1
