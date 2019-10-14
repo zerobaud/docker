@@ -275,30 +275,6 @@ services:
       - traefik.liveview.port=7446
       - traefik.liveview.protocol=https
 
-  # Ubiquiti UNMS for EdgeMAX management
-  unms:
-    image: nico640/docker-unms:latest
-    container_name: unms
-    restart: always
-    volumes:
-      - ${DOCKER_LOCATION}/unms:/config
-    networks:
-      - traefik_proxy
-    ports:
-      - 2055:2055/udp
-    environment:
-      #- PUID
-      #- PGID
-      - TZ
-    labels:
-      - traefik.enable=true
-      - traefik.tags=frontend
-      - traefik.frontend.passHostHeader=true
-      - traefik.admin.backend=unms
-      - traefik.admin.frontend.rule=Host:unms.${DOMAINNAME}
-      - traefik.admin.port=443
-      - traefik.admin.protocol=https
-        
   # ddclient keeps our dynamic DNS up to date
   ddclient:
     image: linuxserver/ddclient
