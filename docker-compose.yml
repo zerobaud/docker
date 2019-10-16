@@ -345,9 +345,10 @@ networks:
       parent: enp0s31f6
     ipam:
       config:
-        - subnet: 192.168.1.0/24
-          gateway: 192.168.1.1
-          ip_range: 192.168.1.208/28
+        - subnet 192.168.1.208/28 
+        #- subnet: 192.168.1.0/24
+          #gateway: 192.168.1.1
+          #ip_range: 192.168.1.208/28
 
   # Default docker bridge network
   default:
