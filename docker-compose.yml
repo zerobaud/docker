@@ -1,6 +1,12 @@
-version: "2.4"
+version: "3.7"
+
+secrets:
+# Obfuscates sensitive information from the docker-compose file.
+    
+  cloudflare_dns_api_token:
+    file: "./secrets/cloudflare_dns_api_token"
+
 services:
- 
 # - Variables under environment: can be defined explicitly or referenced from a .env file.
 # - All services store persitent data on /mnt/tank/docker.  Modify volumes accordingly.
 # - Assumes /mnt/tank/docker set 0775, root:docker.
@@ -71,12 +77,13 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${DOCKER_LOCATION}/traefik:/etc/traefik
       - ${DOCKER_LOCATION}/shared:/shared
+    secrets:
+      - "cloudflare_dns_api_token"
     environment:
       - TZ
       - PUID
       - PGID
-      - NAMECHEAP_API_USER
-      - NAMECHEAP_API_KEY
+      - "CLOUDFLARE_DNS_API_TOKEN=/run/secrets/cloudflare_dns_api_token"
     labels:
       - traefik.enable=true
       - traefik.backend=traefik
