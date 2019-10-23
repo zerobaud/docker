@@ -2,6 +2,7 @@ version: "3.7"
 
 secrets:
 # Obfuscates sensitive information from the docker-compose file.
+    
   cloudflare_dns_api_token:
     file: "./secrets/cloudflare_dns_api_token"
 
@@ -18,55 +19,6 @@ services:
   ###
   ### SYSTEM MANAGEMENT CONTAINERS
   ###
-  # Traefik for container reverse SSL proxy.
-  # All containers with an exposed web front-end are proxied through this
-  # container.  They need to be on the traefik_proxy network, with
-  # appropriate labels to enable them.
-  traefik:
-    container_name: traefik
-    image: traefik
-    restart: always
-    domainname: ${DOMAINNAME}
-    ports:
-      - 80:80
-      - 443:443
-    networks:
-      - traefik_proxy
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ${DOCKER_LOCATION}/traefik2:/etc/traefik
-    secrets:
-      - "cloudflare_dns_api_token"
-    environment:
-      - TZ
-      - PUID
-      - PGID
-      # This variable must end in _FILE for the token to be read from a file.
-      - "CLOUDFLARE_DNS_API_TOKEN_FILE=/run/secrets/cloudflare_dns_api_token"
-    labels:
-      # Let traefik handle this container (we do not expose containers by default)
-      - traefik.enable=true
-      
-      # Traefik dashboard settings.
-      # Note that the api@internal service is traefik-specific.
-      - traefik.http.routers.traefik.rule=Host(`traefik.${DOMAINNAME}`)
-      - traefik.http.routers.traefik.service=api@internal
-      - traefik.http.routers.traefik.tls.certresolver=letsencrypt
-      - traefik.http.routers.traefik.entrypoints=websecure
-
-      # Password auth (optional) - uses htpasswd user/pass 
-      #- "traefik.http.routers.traefik.middlewares=authtraefik"
-      #- "traefik.http.middlewares.authtraefik.basicauth.users=user:xxx"
-
-      # Global redirect all incoming http to https
-      - traefik.http.routers.http-catchall.rule=hostregexp(`{host:.+}`)
-      - traefik.http.routers.http-catchall.entrypoints=web
-      - traefik.http.routers.http-catchall.middlewares=redirect-to-https
-
-      # Middleware for https redirect
-      - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
-
-
   # Watchtower keeps all other containers current
   watchtower:
     container_name: watchtower
@@ -79,8 +31,7 @@ services:
     command: --schedule "0 0 7 * * *" --cleanup
     environment:
       - TZ
-
-
+ 
   # Web management for containers 
   portainer:
     image: portainer/portainer
@@ -99,12 +50,46 @@ services:
       - PGID
     labels:
       - traefik.enable=true
-      - traefik.http.routers.portainer.rule=Host(`portainer.${DOMAINNAME}`)
-      - traefik.http.routers.portainer.entrypoints=websecure
-      - traefik.http.routers.portainer.tls=true
-      - traefik.http.routers.portainer.tls.certresolver=letsencrypt
-      - traefik.http.services.portainer.loadbalancer.server.port=9000
-  
+      - traefik.backend=portainer
+      - traefik.frontend.rule=Host:portainer.${DOMAINNAME}  
+      - traefik.port=9000
+      - traefik.docker.network=traefik_proxy
+    
+  # Traefik for container reverse SSL proxy.
+  # All containers with an exposed web front-end are proxied through this
+  # container.  They need to be on the traefik_proxy network, with
+  # appropriate labels to enable them.
+  traefik:
+    container_name: traefik
+    # Should migrate to traefik 2.0, but config files totally different.
+    # Potential issues around dynamic LetsEncrypt cert generation.
+    # Maybe wait for another release or two.
+    image: traefik:v1.7.16-alpine
+    restart: always
+    domainname: ${DOMAINNAME}
+    ports:
+      - 80:80
+      - 443:443
+      - 8888:8080
+    networks:
+      - traefik_proxy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${DOCKER_LOCATION}/traefik:/etc/traefik
+      - ${DOCKER_LOCATION}/shared:/shared
+    secrets:
+      - "cloudflare_dns_api_token"
+    environment:
+      - TZ
+      - PUID
+      - PGID
+      - "CLOUDFLARE_DNS_API_TOKEN=/run/secrets/cloudflare_dns_api_token"
+    labels:
+      - traefik.enable=true
+      - traefik.backend=traefik
+      - traefik.frontend.rule=Host:traefik.${DOMAINNAME}
+      - traefik.port=8080
+      - traefik.docker.network=traefik_proxy
 
   # Duplicati for cloud backups of important data.
   duplicati:
@@ -128,12 +113,10 @@ services:
       - TZ
     labels:
       - traefik.enable=true
-      - traefik.http.routers.duplicati.rule=Host(`duplicati.${DOMAINNAME}`)
-      - traefik.http.routers.duplicati.entrypoints=websecure
-      - traefik.http.routers.duplicati.tls=true
-      - traefik.http.routers.duplicati.tls.certresolver=letsencrypt
-      - traefik.http.services.duplicati.loadbalancer.server.port=8200
-        
+      - traefik.backend=duplicati
+      - traefik.frontend.rule=Host:duplicati.${DOMAINNAME}
+      - traefik.port=8200
+      - traefik.docker.network=traefik_proxy
   
   ###
   ### MEDIA SERVER CONTAINERS
@@ -155,13 +138,12 @@ services:
       - GID=${PGID}
     labels:
       - traefik.enable=true
-      - traefik.http.routers.emby.rule=Host(`emby.${DOMAINNAME}`)
-      - traefik.http.routers.emby.entrypoints=websecure
-      - traefik.http.routers.emby.tls=true
-      - traefik.http.routers.emby.tls.certresolver=letsencrypt
-      - traefik.http.services.emby.loadbalancer.server.port=8096
-       
-
+      - traefik.backend=emby
+      - traefik.frontend.rule=Host:emby.${DOMAINNAME}
+      #- traefik.port=8920
+      - traefik.port=8096
+      - traefik.docker.network=traefik_proxy
+      
   # Sabnzbd for snatching usenet NZBs
   sabnzbd:
     container_name: sabnzbd
@@ -179,13 +161,11 @@ services:
       - PGID
     labels:
       - traefik.enable=true
-      - traefik.http.routers.sabnzbd.rule=Host(`sabnzbd.${DOMAINNAME}`)
-      - traefik.http.routers.sabnzbd.entrypoints=websecure
-      - traefik.http.routers.sabnzbd.tls=true
-      - traefik.http.routers.sabnzbd.tls.certresolver=letsencrypt
-      - traefik.http.services.sabnzbd.loadbalancer.server.port=8080
-   
-
+      - traefik.backend=sabnzbd
+      - traefik.frontend.rule=Host:sabnzbd.${DOMAINNAME}
+      - traefik.port=8080
+      - traefik.docker.network=traefik_proxy
+    
   # Sonarr for TV series management
   sonarr:
     container_name: sonarr
@@ -206,13 +186,11 @@ services:
       - PGID
     labels:
       - traefik.enable=true
-      - traefik.http.routers.sonarr.rule=Host(`sonarr.${DOMAINNAME}`)
-      - traefik.http.routers.sonarr.entrypoints=websecure
-      - traefik.http.routers.sonarr.tls=true
-      - traefik.http.routers.sonarr.tls.certresolver=letsencrypt
-      - traefik.http.services.sonarr.loadbalancer.server.port=8989
-     
-
+      - traefik.backend=sonarr
+      - traefik.frontend.rule=Host:sonarr.${DOMAINNAME}
+      - traefik.port=8989
+      - traefik.docker.network=traefik_proxy
+      
   ###
   ### Network Management
   ###
@@ -249,13 +227,13 @@ services:
       - PGID
     labels:
       - traefik.enable=true
-      - traefik.http.routers.unifi-controller.rule=Host(`unifi-controller.${DOMAINNAME}`)
-      - traefik.http.routers.unifi-controller.entrypoints=websecure
-      - traefik.http.routers.unifi-controller.tls=true
-      - traefik.http.routers.unifi-controller.tls.certresolver=letsencrypt
-      - traefik.http.services.unifi-controller.loadbalancer.server.port=8443
-      - traefik.http.services.unifi-controller.loadbalancer.server.scheme=https
-
+      - traefik.tags=frontend
+      - traefik.frontend.passHostHeader=true
+      - traefik.admin.backend=unifi-controller
+      - traefik.admin.frontend.rule=Host:unifi-controller.${DOMAINNAME}
+      - traefik.admin.port=8443
+      - traefik.admin.protocol=https
+      
   # UniFi Video NVR
   unifi-video:
     container_name: unifi-video
@@ -295,13 +273,14 @@ services:
       - PGID
     labels:
       - traefik.enable=true
-      - traefik.http.routers.unifi-video.rule=Host(`unifi-video.${DOMAINNAME}`)
-      - traefik.http.routers.unifi-video.entrypoints=websecure
-      - traefik.http.routers.unifi-video.tls=true
-      - traefik.http.routers.unifi-video.tls.certresolver=letsencrypt
-      - traefik.http.services.unifi-video.loadbalancer.server.port=7443
-      - traefik.http.services.unifi-video.loadbalancer.server.scheme=https
-
+      - traefik.tags=frontend
+      - traefik.frontend.passHostHeader=true
+      - traefik.admin.backend=unifi-video
+      - traefik.admin.frontend.rule=Host:unifi-video.${DOMAINNAME}
+      - traefik.admin.port=7443
+      - traefik.admin.protocol=https
+      - traefik.liveview.port=7446
+      - traefik.liveview.protocol=https
 
   # ddclient keeps our dynamic DNS up to date
   ddclient:
@@ -314,43 +293,41 @@ services:
       - PUID
       - PGID
       - TZ
-     
-
+      
   # Homebridge for Homekit integration
-#  homebridge:
-#    image: oznu/homebridge
-#    container_name: homebridge
-#    restart: always
-#    volumes:
-#      - ${DOCKER_LOCATION}/homebridge:/homebridge
-#    #network_mode: host
-#    networks:
-#      direct:
-#        ipv4_address: 192.168.1.209
-#    #networks:
-#    #  - traefik_proxy
-#    #ports:
-#    #  - 5353:5353/tcp
-#    #  - 51826:51826/tcp
-#    environment:
-#      - PUID
-#      - PGID
-#      - TZ
-#      - HOMEBRIDGE_CONFIG_UI=1
-#      - HOMEBRIDGE_CONFIG_UI_PORT=8180
-#    #labels:
-#    #  - traefik.enable=true
-#    #  - traefik.tags=frontend
-#    #  - traefik.frontend.passHostHeader=true
-#    #  - traefik.admin.backend=unms
-#    #  - traefik.admin.frontend.rule=Host:homebridge.${DOMAINNAME}
-#    #  - traefik.admin.port=8080
-#    #  - traefik.admin.protocol=http
-
+  homebridge:
+    image: oznu/homebridge
+    container_name: homebridge
+    restart: always
+    volumes:
+      - ${DOCKER_LOCATION}/homebridge:/homebridge
+    #network_mode: host
+    networks:
+      direct:
+        ipv4_address: 192.168.1.209
+    #networks:
+    #  - traefik_proxy
+    #ports:
+    #  - 5353:5353/tcp
+    #  - 51826:51826/tcp
+    environment:
+      - PUID
+      - PGID
+      - TZ
+      - HOMEBRIDGE_CONFIG_UI=1
+      - HOMEBRIDGE_CONFIG_UI_PORT=8180
+    #labels:
+    #  - traefik.enable=true
+    #  - traefik.tags=frontend
+    #  - traefik.frontend.passHostHeader=true
+    #  - traefik.admin.backend=unms
+    #  - traefik.admin.frontend.rule=Host:homebridge.${DOMAINNAME}
+    #  - traefik.admin.port=8080
+    #  - traefik.admin.protocol=http
 
 # Docker network definitions, other than default.
 networks:
- 
+  
   # Network for containers with exposed services (proxied through Traefik)
   traefik_proxy:
     driver: bridge
@@ -367,9 +344,10 @@ networks:
     driver_opts:
       parent: enp0s31f6
     ipam:
+      #driver: macvlan 
       config:
-        - subnet: 192.168.1.208/28
-          # Doesn't work in docker-compose 3.x
+       - subnet: 192.168.1.208/28 
+        #- subnet: 192.168.1.0/24
           #gateway: 192.168.1.1
           #ip_range: 192.168.1.208/28
 
@@ -378,4 +356,4 @@ networks:
     driver: bridge
     driver_opts:
       # Set interface name on host to something meaningful
-      com.docker.network.bridge.name: docker_default
+      com.docker.network.bridge.name: docker1
