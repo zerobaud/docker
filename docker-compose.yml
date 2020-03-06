@@ -207,37 +207,35 @@ services:
       - traefik.http.routers.sonarr.tls.certresolver=letsencrypt
       - traefik.http.services.sonarr.loadbalancer.server.port=8989
   
-  # Transmission for torrents
-  transmission:
-    container_name: transmission
-    image: linuxserver/transmission
+  # qbittorrent for torrents
+  qbittorrent:
+    container_name: qbittorrent
+    image: linuxserver/qbittorrent
     restart: unless-stopped
     networks:
       - traefik_proxy
     volumes:
-      - ${DOCKER_LOCATION}/transmission:/config
+      - ${DOCKER_LOCATION}/qbittorrent:/config
+      - ${DOCKER_LOCATION}/shared/torrents:/downloads
       - /mnt/tank/media/movies:/downloads/movies
       - /mnt/tank/media/tv:/downloads/tv
       - /mnt/tank/media/other:/downloads/other
-      - ${DOCKER_LOCATION}/shared/downloads/watched:/watch
-      - ${DOCKER_LOCATION}/shared/downloads/incomplete:/downloads/incomplete
-      - ${DOCKER_LOCATION}/shared/downloads/seeding:/downloads/seeding
     environment:
       - TZ
       - PUID
       - PGID
-      - TRANSMISSION_WEB_HOME=/combustion-release/ #optional
+      - UMASK_SET=022
+      - WEBUI_PORT=8080
     ports:
-      #- 9091:9091 # web ui
-      - 51413:51413
-      - 51413:51413/udp
+      - 51444:51444
+      - 51444:51444/udp
     labels:
       - traefik.enable=true
-      - traefik.http.routers.transmission.rule=Host(`transmission.${DOMAINNAME}`)
-      - traefik.http.routers.transmission.entrypoints=websecure
-      - traefik.http.routers.transmission.tls=true
-      - traefik.http.routers.transmission.tls.certresolver=letsencrypt
-      - traefik.http.services.transmission.loadbalancer.server.port=9091
+      - traefik.http.routers.qbittorrent.rule=Host(`qbittorrent.${DOMAINNAME}`)
+      - traefik.http.routers.qbittorrent.entrypoints=websecure
+      - traefik.http.routers.qbittorrent.tls=true
+      - traefik.http.routers.qbittorrent.tls.certresolver=letsencrypt
+      - traefik.http.services.qbittorrent.loadbalancer.server.port=8080
         
   # Organizr for home media dashboard
   organizr:
