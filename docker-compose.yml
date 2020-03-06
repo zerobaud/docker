@@ -66,7 +66,6 @@ services:
       # Middleware for https redirect
       - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
 
-
   # Watchtower keeps all other containers current
   watchtower:
     container_name: watchtower
@@ -79,7 +78,6 @@ services:
     command: --schedule "0 0 7 * * *" --cleanup
     environment:
       - TZ
-
 
   # Web management for containers 
   portainer:
@@ -105,7 +103,6 @@ services:
       - traefik.http.routers.portainer.tls.certresolver=letsencrypt
       - traefik.http.services.portainer.loadbalancer.server.port=9000
   
-
   # Duplicati for cloud backups of important data.
   duplicati:
     container_name: duplicati
@@ -160,7 +157,6 @@ services:
       - traefik.http.routers.emby.tls=true
       - traefik.http.routers.emby.tls.certresolver=letsencrypt
       - traefik.http.services.emby.loadbalancer.server.port=8096
-       
 
   # Sabnzbd for snatching usenet NZBs
   sabnzbd:
@@ -185,7 +181,6 @@ services:
       - traefik.http.routers.sabnzbd.tls.certresolver=letsencrypt
       - traefik.http.services.sabnzbd.loadbalancer.server.port=8080
    
-
   # Sonarr for TV series management
   sonarr:
     container_name: sonarr
@@ -211,7 +206,60 @@ services:
       - traefik.http.routers.sonarr.tls=true
       - traefik.http.routers.sonarr.tls.certresolver=letsencrypt
       - traefik.http.services.sonarr.loadbalancer.server.port=8989
-     
+  
+  # Transmission for torrents
+  transmission:
+    container_name: transmission
+    image: linuxserver/transmission
+    restart: unless-stopped
+    networks:
+      - traefik_proxy
+    volumes:
+      - ${DOCKER_LOCATION}/transmission:/config
+      - /mnt/tank/media/movies:/downloads/movies
+      - /mnt/tank/media/tv:/downloads/tv
+      - /mnt/tank/media/other:/downloads/other
+      - ${DOCKER_LOCATION}/shared/downloads/watched:/watch
+      - ${DOCKER_LOCATION}/shared/downloads/incomplete:/downloads/incomplete
+      - ${DOCKER_LOCATION}/shared/downloads/seeding:/downloads/seeding
+    environment:
+      - TZ
+      - PUID
+      - PGID
+      - TRANSMISSION_WEB_HOME=/combustion-release/ #optional
+    ports:
+      #- 9091:9091 # web ui
+      - 51413:51413
+      - 51413:51413/udp
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.transmission.rule=Host(`transmission.${DOMAINNAME}`)
+      - traefik.http.routers.transmission.entrypoints=websecure
+      - traefik.http.routers.transmission.tls=true
+      - traefik.http.routers.transmission.tls.certresolver=letsencrypt
+      - traefik.http.services.transmission.loadbalancer.server.port=9091
+        
+  # Organizr for home media dashboard
+  organizr:
+    container_name: organizr
+    image: linuxserver/organizr
+    restart: always
+    networks:
+      - traefik_proxy
+    volumes:
+      - ${DOCKER_LOCATION}/organizr:/config
+    environment:
+      - TZ
+      - PUID
+      - PGID
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.organizr.rule=Host(`organizr.${DOMAINNAME}`)
+      - traefik.http.routers.organizr.entrypoints=websecure
+      - traefik.http.routers.organizr.tls=true
+      - traefik.http.routers.organizr.tls.certresolver=letsencrypt
+      - traefik.http.services.organizr.loadbalancer.server.port=80
+
 
   ###
   ### Network Management
@@ -256,8 +304,73 @@ services:
       - traefik.http.services.unifi-controller.loadbalancer.server.port=8443
       - traefik.http.services.unifi-controller.loadbalancer.server.scheme=https
 
+  # Telegraf to collect server metrics and dump into InfluxDB
+  telegraf:
+    container_name: telegraf
+    image: telegraf
+    restart: unless-stopped
+    networks:
+      - traefik_proxy
+    volumes:
+      - ${DOCKER_LOCATION}/telegraf:/etc/telegraf:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc:/host/proc:ro
+    environment:
+      - HOST_PROC=/host/proc
+      - TZ
+      - PUID
+      - PGID
 
-  # Homebridge for Homekit integration
+  # InfluxDB for time-series data collection
+  influxdb:
+    container_name: influxdb
+    image: influxdb:latest
+    restart: unless-stopped
+    networks:
+      - traefik_proxy
+    volumes:
+      - ${DOCKER_LOCATION}/influxdb:/var/lib/influxdb
+    environment:
+      - INFLUXDB_DB=telegraf 
+      - INFLUXDB_USER=telegraf
+      - INFLUXDB_USER_PASSWORD=InfluxDB()1
+      - TZ
+      - PUID
+      - PGID
+    labels:
+        - traefik.enable=true
+        - traefik.http.routers.influxdb.rule=Host(`influxdb.${DOMAINNAME}`)
+        - traefik.http.routers.influxdb.entrypoints=websecure
+        - traefik.http.routers.influxdb.tls=true
+        - traefik.http.routers.influxdb.tls.certresolver=letsencrypt
+        - traefik.http.services.influxdb.loadbalancer.server.port=8086
+
+  # Grafana to create dashboards from data in InfluxDB
+  grafana:
+    container_name: grafana
+    image: grafana/grafana
+    restart: unless-stopped
+    networks:
+      - traefik_proxy
+    volumes:
+     - ${DOCKER_LOCATION}/grafana:/var/lib/grafana
+    environment:
+     - GF_SECURITY_ADMIN_PASSWORD=Gr4f4n4()
+     # Comment out if you have users that should sign up
+     - GF_USERS_ALLOW_SIGN_UP=false 
+     - GF_SERVER_ROOT_URL=https://grafana.srv.brooks.haus
+     - TZ
+     - PUID
+     - PGID
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.grafana.rule=Host(`grafana.${DOMAINNAME}`)
+      - traefik.http.routers.grafana.entrypoints=websecure
+      - traefik.http.routers.grafana.tls=true
+      - traefik.http.routers.grafana.tls.certresolver=letsencrypt
+      - traefik.http.services.grafana.loadbalancer.server.port=3000
+
+    # Homebridge for Homekit integration
 #  homebridge:
 #    image: oznu/homebridge
 #    container_name: homebridge
