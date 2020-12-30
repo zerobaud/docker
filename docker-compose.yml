@@ -1,4 +1,4 @@
-version: "3.7"
+version: "2.4"
 
 secrets:
 # Obfuscates sensitive information from the docker-compose file.
@@ -25,7 +25,7 @@ services:
   traefik:
     container_name: traefik
     image: traefik
-    restart: always
+    restart: unless-stopped
     domainname: ${DOMAINNAME}
     ports:
       - 80:80
@@ -34,7 +34,7 @@ services:
       - traefik_proxy
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ${DOCKER_LOCATION}/traefik2:/etc/traefik
+      - ${DOCKER_LOCATION}/traefik:/etc/traefik
     secrets:
       - "cloudflare_dns_api_token"
     environment:
@@ -69,19 +69,19 @@ services:
   # Watchtower keeps all other containers current
   watchtower:
     container_name: watchtower
-    restart: unless-stopped
+    restart: always
     #image: v2tec/watchtower # project seems dead?
     image: containrrr/watchtower
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    # Checks for new container images every day at 7AM (cron format)
-    command: --schedule "0 0 7 * * *" --cleanup
+    # Checks for new container images every day at 6AM (cron format)
+    command: --schedule "0 0 6 * * *" --cleanup
     environment:
       - TZ
 
   # Web management for containers 
   portainer:
-    image: portainer/portainer
+    image: portainer/portainer-ce
     container_name: portainer
     restart: always
     command: -H unix:///var/run/docker.sock
@@ -90,7 +90,6 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${DOCKER_LOCATION}/portainer/data:/data
-      - ${DOCKER_LOCATION}/shared:/shared
     environment:
       - TZ
       - PUID
@@ -107,7 +106,7 @@ services:
   duplicati:
     container_name: duplicati
     image: linuxserver/duplicati
-    restart: always
+    restart: unless-stopped
     networks:
       - traefik_proxy
     # First run:  Uncomment the ports definition below, SSH into into docker host with:
@@ -139,7 +138,7 @@ services:
   emby:
     container_name: emby
     image: emby/embyserver
-    restart: always
+    restart: unless-stopped
     networks:
       - traefik_proxy
     volumes:
@@ -162,7 +161,7 @@ services:
   sabnzbd:
     container_name: sabnzbd
     image: linuxserver/sabnzbd
-    restart: always
+    restart: unless-stopped
     networks:
       - traefik_proxy
     volumes:
@@ -185,7 +184,7 @@ services:
   sonarr:
     container_name: sonarr
     image: linuxserver/sonarr
-    restart: always
+    restart: unless-stopped
     networks:
       - traefik_proxy
     # Monitors the same directory as sabnzbd for completed downloads,
@@ -241,7 +240,7 @@ services:
   organizr:
     container_name: organizr
     image: linuxserver/organizr
-    restart: always
+    restart: unless-stopped
     networks:
       - traefik_proxy
     volumes:
@@ -266,7 +265,7 @@ services:
   unifi-controller:
     container_name: unifi-controller
     image: linuxserver/unifi-controller 
-    restart: always
+    restart: unless-stopped
     networks:
       - traefik_proxy
     # Even though we're exposing the admin UI via Traefik, we still need direct
@@ -368,41 +367,47 @@ services:
   #    - traefik.http.routers.grafana.tls.certresolver=letsencrypt
   #    - traefik.http.services.grafana.loadbalancer.server.port=3000
  
-    # Homebridge for Homekit integration
-#  homebridge:
-#    image: oznu/homebridge
-#    container_name: homebridge
-#    restart: always
-#    volumes:
-#      - ${DOCKER_LOCATION}/homebridge:/homebridge
-#    #network_mode: host
-#    networks:
-#      direct:
-#        ipv4_address: 192.168.1.209
-#    #networks:
-#    #  - traefik_proxy
-#    #ports:
-#    #  - 5353:5353/tcp
-#    #  - 51826:51826/tcp
-#    environment:
-#      - PUID
-#      - PGID
-#      - TZ
-#      - HOMEBRIDGE_CONFIG_UI=1
-#      - HOMEBRIDGE_CONFIG_UI_PORT=8180
-#    #labels:
-#    #  - traefik.enable=true
-#    #  - traefik.tags=frontend
-#    #  - traefik.frontend.passHostHeader=true
-#    #  - traefik.admin.backend=unms
-#    #  - traefik.admin.frontend.rule=Host:homebridge.${DOMAINNAME}
-#    #  - traefik.admin.port=8080
-#    #  - traefik.admin.protocol=http
+  ## Homebridge for Homekit integration
+  homebridge:
+    image: oznu/homebridge
+    container_name: homebridge
+    restart: unless-stopped
+    volumes:
+      - ${DOCKER_LOCATION}/homebridge:/homebridge
+    ## Uncomment below for host networking mode
+    #network_mode: host
+    ## Uncomment below to use a real IP address for the container.
+    #networks:
+    #  direct:
+    #    ipv4_address: 192.168.1.254
+    ## Uncomment below to use Traefik to proxy connections.
+    ## You MUST expose the correct port, use the homebridge-avahi-helper.sh script
+    ## after starting the container once to identify the port and publish an avahi
+    ## service.
+    networks:
+      - traefik_proxy
+    ports:
+      - 51780:51780/tcp
+    environment:
+      - PUID
+      - PGID
+      - TZ
+      - HOMEBRIDGE_CONFIG_UI=1          # Use a web UI
+      - HOMEBRIDGE_CONFIG_UI_PORT=8180  # Web UI port
+      #- PACKAGES=openssh                # optional packages to install
+      ## Uncomment the below ONLY if using Traefik to proxy traffic. 
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.homebridge.rule=Host(`homebridge.${DOMAINNAME}`)
+      - traefik.http.routers.homebridge.entrypoints=websecure
+      - traefik.http.routers.homebridge.tls=true
+      - traefik.http.routers.homebridge.tls.certresolver=letsencrypt
+      - traefik.http.services.homebridge.loadbalancer.server.port=8180
 
 
-# Docker network definitions, other than default.
 networks:
- 
+# Docker network definitions, other than default.
+
   # Network for containers with exposed services (proxied through Traefik)
   traefik_proxy:
     driver: bridge
@@ -414,16 +419,16 @@ networks:
   # Consider for containers that require host networking, or lots of exposed ports,
   # to prevent port overlap.
   direct:
-    #external: true  # network not created by docker-compose
+    #external: true                     # network not created by docker-compose
     driver: macvlan
     driver_opts:
       parent: enp0s31f6
     ipam:
       config:
-        - subnet: 192.168.1.208/28
-          # Doesn't work in docker-compose 3.x
-          #gateway: 192.168.1.1
-          #ip_range: 192.168.1.208/28
+        - subnet: 192.168.1.0/24        # Define the whole network
+          # Below options don't work in docker-compose 3.x
+          gateway: 192.168.1.1          # Default gateway for containers
+          ip_range: 192.168.1.248/29    # Range containers can use
 
   # Default docker bridge network
   default:
