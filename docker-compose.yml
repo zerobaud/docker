@@ -1,4 +1,4 @@
-version: "2.4"
+version: "3.9"
 
 secrets:
 # Obfuscates sensitive information from the docker-compose file.
@@ -70,7 +70,6 @@ services:
   watchtower:
     container_name: watchtower
     restart: always
-    #image: v2tec/watchtower # project seems dead?
     image: containrrr/watchtower
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -262,45 +261,45 @@ services:
   ### Network Management
   ###
   # UniFi AP management utility
-  unifi-controller:
-    container_name: unifi-controller
-    image: linuxserver/unifi-controller 
-    restart: unless-stopped
-    networks:
-      - traefik_proxy
-    # Even though we're exposing the admin UI via Traefik, we still need direct
-    # exposure for other ports for communication with AP(s).
-    ports:
-      - 8443:8443/tcp
-      - 8080:8080/tcp
-      - 3478:3478/udp
-      - 10001:10001/udp
-      # Only needed for captive portal redirect
-      #- "8880:8880/tcp
-      #- "8843:8843/tcp
-      # Only needed for UniFi mobile speedtest
-      #- "6789:6789/tcp
-      # Only needed for controller L2 discoverable
-      #- "1900:1900/udp
-      # Only needed for local-bound database
-      #- "27117:27117/tcp
-      # ????
-      #- "8081:8081
-    volumes:
-      - ${DOCKER_LOCATION}/unifi-controller:/config
-    environment:
-      - TZ
-      - PUID
-      - PGID
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.unifi-controller.rule=Host(`unifi-controller.${DOMAINNAME}`)
-      - traefik.http.routers.unifi-controller.entrypoints=websecure
-      - traefik.http.routers.unifi-controller.tls=true
-      - traefik.http.routers.unifi-controller.tls.certresolver=letsencrypt
-      - traefik.http.services.unifi-controller.loadbalancer.server.port=8443
-      - traefik.http.services.unifi-controller.loadbalancer.server.scheme=https
-
+  #unifi-controller:
+  #  container_name: unifi-controller
+  #  image: linuxserver/unifi-controller 
+  #  restart: unless-stopped
+  #  networks:
+  #    - traefik_proxy
+  #  # Even though we're exposing the admin UI via Traefik, we still need direct
+  #  # exposure for other ports for communication with AP(s).
+  #  ports:
+  #    - 8443:8443/tcp
+  #    - 8080:8080/tcp
+  #    - 3478:3478/udp
+  #    - 10001:10001/udp
+  #    # Only needed for captive portal redirect
+  #    #- "8880:8880/tcp
+  #    #- "8843:8843/tcp
+  #    # Only needed for UniFi mobile speedtest
+  #    #- "6789:6789/tcp
+  #    # Only needed for controller L2 discoverable
+  #    #- "1900:1900/udp
+  #    # Only needed for local-bound database
+  #    #- "27117:27117/tcp
+  #    # ????
+  #    #- "8081:8081
+  #  volumes:
+  #    - ${DOCKER_LOCATION}/unifi-controller:/config
+  #  environment:
+  #    - TZ
+  #    - PUID
+  #    - PGID
+  #  labels:
+  #    - traefik.enable=true
+  #    - traefik.http.routers.unifi-controller.rule=Host(`unifi-controller.${DOMAINNAME}`)
+  #    - traefik.http.routers.unifi-controller.entrypoints=websecure
+  #    - traefik.http.routers.unifi-controller.tls=true
+  #    - traefik.http.routers.unifi-controller.tls.certresolver=letsencrypt
+  #    - traefik.http.services.unifi-controller.loadbalancer.server.port=8443
+  #    - traefik.http.services.unifi-controller.loadbalancer.server.scheme=https
+  
   ## Telegraf to collect server metrics and dump into InfluxDB
   #telegraf:
   #  container_name: telegraf
@@ -369,12 +368,12 @@ services:
  
   ## Homebridge for Homekit integration
   homebridge:
-    image: oznu/homebridge
+    image: oznu/homebridge:no-avahi
     container_name: homebridge
-    restart: unless-stopped
+    restart: always
     volumes:
       - ${DOCKER_LOCATION}/homebridge:/homebridge
-    ## Uncomment below for host networking mode
+    # Uncomment below for host networking mode
     #network_mode: host
     ## Uncomment below to use a real IP address for the container.
     #networks:
@@ -387,15 +386,14 @@ services:
     networks:
       - traefik_proxy
     ports:
-      - 51780:51780/tcp
+      - 53936:53936/tcp
     environment:
       - PUID
       - PGID
       - TZ
       - HOMEBRIDGE_CONFIG_UI=1          # Use a web UI
       - HOMEBRIDGE_CONFIG_UI_PORT=8180  # Web UI port
-      #- PACKAGES=openssh                # optional packages to install
-      ## Uncomment the below ONLY if using Traefik to proxy traffic. 
+    # Uncomment the below ONLY if using Traefik to proxy traffic. 
     labels:
       - traefik.enable=true
       - traefik.http.routers.homebridge.rule=Host(`homebridge.${DOMAINNAME}`)
@@ -404,13 +402,102 @@ services:
       - traefik.http.routers.homebridge.tls.certresolver=letsencrypt
       - traefik.http.services.homebridge.loadbalancer.server.port=8180
 
+  # Mosquitto is an MQTT broker, a lightweight message queue for IoT devices.
+  mosquitto:
+    container_name: mosquitto
+    image: eclipse-mosquitto
+    restart: always
+    networks:
+      - traefik_proxy
+    hostname: mosquitto
+    volumes:
+      # This image is stupid, makes hard mounts for /mosquitto/[data,log].
+      # Forces you to mount each directory by itself.
+      - ${DOCKER_LOCATION}/mosquitto/config:/mosquitto/config
+      - ${DOCKER_LOCATION}/mosquitto/data:/mosquitto/data
+      - ${DOCKER_LOCATION}/mosquitto/log:/mosquitto/log
+    environment:
+      - TZ
+      - PUID
+      - PGID
+
+  # zigbee2mqtt allows us to manage Zigbee devices through a USB zigbee radio.
+  zigbee2mqtt:
+    container_name: zigbee2mqtt
+    image: koenkk/zigbee2mqtt
+    restart: always
+    depends_on: 
+      - "mosquitto"
+    networks:
+      - traefik_proxy
+    volumes:
+      - ${DOCKER_LOCATION}/zigbee2mqtt:/app/data
+      - /run/udev:/run/udev:ro
+    devices:
+      # Use the below decice for Nortek USB stick
+      #- /dev/ttyUSB1:/dev/ttyUSB1
+      # Use the below device for Conbee2 USB stick 
+      - /dev/ttyACM0:/dev/ttyACM0
+    environment:
+      - TZ
+      - PUID
+      - PGID
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.zigbee2mqtt.rule=Host(`zigbee2mqtt.${DOMAINNAME}`)
+      - traefik.http.routers.zigbee2mqtt.entrypoints=websecure
+      - traefik.http.routers.zigbee2mqtt.tls=true
+      - traefik.http.routers.zigbee2mqtt.tls.certresolver=letsencrypt
+      - traefik.http.services.zigbee2mqtt.loadbalancer.server.port=8080
+
+  # zwave2mqtt bridges ZWave devices with MQTT via a USB zwave radio.
+  #zwave2mqtt:
+  #  container_name: zwave2mqtt
+  #  image: robertslando/zwave2mqtt:latest
+  #  restart: always
+  #  tty: true
+  #  stop_signal: SIGINT
+  #  depends_on:
+  #    - "mosquitto"
+  #  networks:
+  #    - traefik_proxy
+  #  volumes:
+  #    - ${DOCKER_LOCATION}/zwave2mqtt:/usr/src/app/store
+  #    - /run/udev:/run/udev:ro
+  #  devices:
+  #    - /dev/ttyUSB0:/dev/ttyUSB0
+  #  environment:
+  #    - TZ
+  #    - PUID
+  #    - PGID
+  #  labels:
+  #    - traefik.enable=true
+  #    - traefik.http.routers.zwave2mqtt.rule=Host(`zwave2mqtt.${DOMAINNAME}`)
+  #    - traefik.http.routers.zwave2mqtt.entrypoints=websecure
+  #    - traefik.http.routers.zwave2mqtt.tls=true
+  #    - traefik.http.routers.zwave2mqtt.tls.certresolver=letsencrypt
+  #    - traefik.http.services.zwave2mqtt.loadbalancer.server.port=8091 
+
+  ## 
+  ## Containers for testing
+  ##
+  alpine:
+    container_name: alpine
+    image: alpine
+    restart: unless-stopped
+    volumes:
+      - alpine:/alpine
+    environment:
+      - TZ
+    command: "/bin/sh"
+    stdin_open: true
+    tty: true
 
 networks:
 # Docker network definitions, other than default.
 
   # Network for containers with exposed services (proxied through Traefik)
   traefik_proxy:
-    driver: bridge
     driver_opts:
       # Set interface name on host to something meaningful
       com.docker.network.bridge.name: docker_proxy
@@ -432,7 +519,9 @@ networks:
 
   # Default docker bridge network
   default:
-    driver: bridge
     driver_opts:
       # Set interface name on host to something meaningful
       com.docker.network.bridge.name: docker_default
+
+volumes:
+  alpine:
