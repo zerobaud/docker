@@ -259,17 +259,17 @@ services:
   ## 
   ## Containers for testing
   ##
-  alpine:
-    container_name: alpine
-    image: alpine
-    restart: unless-stopped
-    volumes:
-      - alpine:/alpine
-    environment:
-      - TZ
-    command: "/bin/sh"
-    stdin_open: true
-    tty: true
+  #alpine:
+  #  container_name: alpine
+  #  image: alpine
+  #  restart: unless-stopped
+  #  volumes:
+  #    - alpine:/alpine
+  #  environment:
+  #    - TZ
+  #  command: "/bin/sh"
+  #  stdin_open: true
+  #  tty: true
 
 networks:
 # Docker network definitions, other than default.
