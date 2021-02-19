@@ -1,4 +1,4 @@
-version: "3.9"
+version: "3.7"
 
 secrets:
 # Obfuscates sensitive information from the docker-compose file.
@@ -256,228 +256,6 @@ services:
       - traefik.http.routers.organizr.tls.certresolver=letsencrypt
       - traefik.http.services.organizr.loadbalancer.server.port=80
 
-
-  ###
-  ### Network Management
-  ###
-  # UniFi AP management utility
-  #unifi-controller:
-  #  container_name: unifi-controller
-  #  image: linuxserver/unifi-controller 
-  #  restart: unless-stopped
-  #  networks:
-  #    - traefik_proxy
-  #  # Even though we're exposing the admin UI via Traefik, we still need direct
-  #  # exposure for other ports for communication with AP(s).
-  #  ports:
-  #    - 8443:8443/tcp
-  #    - 8080:8080/tcp
-  #    - 3478:3478/udp
-  #    - 10001:10001/udp
-  #    # Only needed for captive portal redirect
-  #    #- "8880:8880/tcp
-  #    #- "8843:8843/tcp
-  #    # Only needed for UniFi mobile speedtest
-  #    #- "6789:6789/tcp
-  #    # Only needed for controller L2 discoverable
-  #    #- "1900:1900/udp
-  #    # Only needed for local-bound database
-  #    #- "27117:27117/tcp
-  #    # ????
-  #    #- "8081:8081
-  #  volumes:
-  #    - ${DOCKER_LOCATION}/unifi-controller:/config
-  #  environment:
-  #    - TZ
-  #    - PUID
-  #    - PGID
-  #  labels:
-  #    - traefik.enable=true
-  #    - traefik.http.routers.unifi-controller.rule=Host(`unifi-controller.${DOMAINNAME}`)
-  #    - traefik.http.routers.unifi-controller.entrypoints=websecure
-  #    - traefik.http.routers.unifi-controller.tls=true
-  #    - traefik.http.routers.unifi-controller.tls.certresolver=letsencrypt
-  #    - traefik.http.services.unifi-controller.loadbalancer.server.port=8443
-  #    - traefik.http.services.unifi-controller.loadbalancer.server.scheme=https
-  
-  ## Telegraf to collect server metrics and dump into InfluxDB
-  #telegraf:
-  #  container_name: telegraf
-  #  image: telegraf
-  #  restart: unless-stopped
-  #  networks:
-  #    - traefik_proxy
-  #  volumes:
-  #    - ${DOCKER_LOCATION}/telegraf:/etc/telegraf:ro
-  #    - /var/run/docker.sock:/var/run/docker.sock:ro
-  #    - /proc:/host/proc:ro
-  #  environment:
-  #    - HOST_PROC=/host/proc
-  #    - TZ
-  #    - PUID
-  #    - PGID
-
-  ## InfluxDB for time-series data collection
-  #influxdb:
-  #  container_name: influxdb
-  #  image: influxdb:latest
-  #  restart: unless-stopped
-  #  networks:
-  #    - traefik_proxy
-  #  volumes:
-  #    - ${DOCKER_LOCATION}/influxdb:/var/lib/influxdb
-  #  environment:
-  #    - INFLUXDB_DB=telegraf 
-  #    - INFLUXDB_USER=telegraf
-  #    - INFLUXDB_USER_PASSWORD=InfluxDB()1
-  #    - TZ
-  #    - PUID
-  #    - PGID
-  #  labels:
-  #      - traefik.enable=true
-  #      - traefik.http.routers.influxdb.rule=Host(`influxdb.${DOMAINNAME}`)
-  #      - traefik.http.routers.influxdb.entrypoints=websecure
-  #      - traefik.http.routers.influxdb.tls=true
-  #      - traefik.http.routers.influxdb.tls.certresolver=letsencrypt
-  #      - traefik.http.services.influxdb.loadbalancer.server.port=8086
-
-  ## Grafana to create dashboards from data in InfluxDB
-  #grafana:
-  #  container_name: grafana
-  #  image: grafana/grafana
-  #  restart: unless-stopped
-  #  networks:
-  #    - traefik_proxy
-  #  volumes:
-  #   - ${DOCKER_LOCATION}/grafana:/var/lib/grafana
-  #  environment:
-  #   - GF_SECURITY_ADMIN_PASSWORD=Gr4f4n4()
-  #   # Comment out if you have users that should sign up
-  #   - GF_USERS_ALLOW_SIGN_UP=false 
-  #   - GF_SERVER_ROOT_URL=https://grafana.srv.brooks.haus
-  #   - TZ
-  #   - PUID
-  #   - PGID
-  #  labels:
-  #    - traefik.enable=true
-  #    - traefik.http.routers.grafana.rule=Host(`grafana.${DOMAINNAME}`)
-  #    - traefik.http.routers.grafana.entrypoints=websecure
-  #    - traefik.http.routers.grafana.tls=true
-  #    - traefik.http.routers.grafana.tls.certresolver=letsencrypt
-  #    - traefik.http.services.grafana.loadbalancer.server.port=3000
- 
-  ## Homebridge for Homekit integration
-  homebridge:
-    image: oznu/homebridge:no-avahi
-    container_name: homebridge
-    restart: always
-    volumes:
-      - ${DOCKER_LOCATION}/homebridge:/homebridge
-    # Uncomment below for host networking mode
-    #network_mode: host
-    ## Uncomment below to use a real IP address for the container.
-    #networks:
-    #  direct:
-    #    ipv4_address: 192.168.1.254
-    ## Uncomment below to use Traefik to proxy connections.
-    ## You MUST expose the correct port, use the homebridge-avahi-helper.sh script
-    ## after starting the container once to identify the port and publish an avahi
-    ## service.
-    networks:
-      - traefik_proxy
-    ports:
-      - 53936:53936/tcp
-    environment:
-      - PUID
-      - PGID
-      - TZ
-      - HOMEBRIDGE_CONFIG_UI=1          # Use a web UI
-      - HOMEBRIDGE_CONFIG_UI_PORT=8180  # Web UI port
-    # Uncomment the below ONLY if using Traefik to proxy traffic. 
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.homebridge.rule=Host(`homebridge.${DOMAINNAME}`)
-      - traefik.http.routers.homebridge.entrypoints=websecure
-      - traefik.http.routers.homebridge.tls=true
-      - traefik.http.routers.homebridge.tls.certresolver=letsencrypt
-      - traefik.http.services.homebridge.loadbalancer.server.port=8180
-
-  # Mosquitto is an MQTT broker, a lightweight message queue for IoT devices.
-  mosquitto:
-    container_name: mosquitto
-    image: eclipse-mosquitto
-    restart: always
-    networks:
-      - traefik_proxy
-    hostname: mosquitto
-    volumes:
-      # This image is stupid, makes hard mounts for /mosquitto/[data,log].
-      # Forces you to mount each directory by itself.
-      - ${DOCKER_LOCATION}/mosquitto/config:/mosquitto/config
-      - ${DOCKER_LOCATION}/mosquitto/data:/mosquitto/data
-      - ${DOCKER_LOCATION}/mosquitto/log:/mosquitto/log
-    environment:
-      - TZ
-      - PUID
-      - PGID
-
-  # zigbee2mqtt allows us to manage Zigbee devices through a USB zigbee radio.
-  zigbee2mqtt:
-    container_name: zigbee2mqtt
-    image: koenkk/zigbee2mqtt
-    restart: always
-    depends_on: 
-      - "mosquitto"
-    networks:
-      - traefik_proxy
-    volumes:
-      - ${DOCKER_LOCATION}/zigbee2mqtt:/app/data
-      - /run/udev:/run/udev:ro
-    devices:
-      # Use the below decice for Nortek USB stick
-      #- /dev/ttyUSB1:/dev/ttyUSB1
-      # Use the below device for Conbee2 USB stick 
-      - /dev/ttyACM0:/dev/ttyACM0
-    environment:
-      - TZ
-      - PUID
-      - PGID
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.zigbee2mqtt.rule=Host(`zigbee2mqtt.${DOMAINNAME}`)
-      - traefik.http.routers.zigbee2mqtt.entrypoints=websecure
-      - traefik.http.routers.zigbee2mqtt.tls=true
-      - traefik.http.routers.zigbee2mqtt.tls.certresolver=letsencrypt
-      - traefik.http.services.zigbee2mqtt.loadbalancer.server.port=8080
-
-  # zwave2mqtt bridges ZWave devices with MQTT via a USB zwave radio.
-  #zwave2mqtt:
-  #  container_name: zwave2mqtt
-  #  image: robertslando/zwave2mqtt:latest
-  #  restart: always
-  #  tty: true
-  #  stop_signal: SIGINT
-  #  depends_on:
-  #    - "mosquitto"
-  #  networks:
-  #    - traefik_proxy
-  #  volumes:
-  #    - ${DOCKER_LOCATION}/zwave2mqtt:/usr/src/app/store
-  #    - /run/udev:/run/udev:ro
-  #  devices:
-  #    - /dev/ttyUSB0:/dev/ttyUSB0
-  #  environment:
-  #    - TZ
-  #    - PUID
-  #    - PGID
-  #  labels:
-  #    - traefik.enable=true
-  #    - traefik.http.routers.zwave2mqtt.rule=Host(`zwave2mqtt.${DOMAINNAME}`)
-  #    - traefik.http.routers.zwave2mqtt.entrypoints=websecure
-  #    - traefik.http.routers.zwave2mqtt.tls=true
-  #    - traefik.http.routers.zwave2mqtt.tls.certresolver=letsencrypt
-  #    - traefik.http.services.zwave2mqtt.loadbalancer.server.port=8091 
-
   ## 
   ## Containers for testing
   ##
@@ -505,17 +283,17 @@ networks:
   # Network for exposing a direct IP to a container.
   # Consider for containers that require host networking, or lots of exposed ports,
   # to prevent port overlap.
-  direct:
-    #external: true                     # network not created by docker-compose
-    driver: macvlan
-    driver_opts:
-      parent: enp0s31f6
-    ipam:
-      config:
-        - subnet: 192.168.1.0/24        # Define the whole network
-          # Below options don't work in docker-compose 3.x
-          gateway: 192.168.1.1          # Default gateway for containers
-          ip_range: 192.168.1.248/29    # Range containers can use
+  #direct:
+  #  #external: true                     # network not created by docker-compose
+  #  driver: macvlan
+  #  driver_opts:
+  #    parent: enp0s31f6
+  #  ipam:
+  #    config:
+  #      - subnet: 192.168.1.0/24        # Define the whole network
+  #        # Below options don't work in docker-compose 3.x
+  #        gateway: 192.168.1.1          # Default gateway for containers
+  #        ip_range: 192.168.1.248/29    # Range containers can use
 
   # Default docker bridge network
   default:

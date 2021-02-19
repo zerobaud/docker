@@ -1,0 +1,64 @@
+{
+    "bridge": {
+        "name": "Homebridge B2E7",
+        "username": "0E:C9:A2:B9:B2:E7",
+        "port": 53936,
+        "pin": "031-45-154"
+    },
+    "ports": {
+        "comment": "This section is used to control the range of ports that separate accessory (like camera or television) should be bind to.",
+        "start": 52100,
+        "end": 52150
+    },
+    "accessories": [],
+    "platforms": [
+        {
+            "name": "Config",
+            "port": 8180,
+            "auth": "form",
+            "theme": "auto",
+            "tempUnits": "f",
+            "lang": "auto",
+            "platform": "config"
+        },
+        {
+            "name": "Nest",
+            "googleAuth": {
+                "issueToken": "https://accounts.google.com/o/oauth2/iframerpc?action=issueToken&response_type=token%20id_token&login_hint=AJDLj6LQu-SMCQLMJfOUep6S7tCeifB2ZDyS4Zohd-E8UtHjbiKPhwpLxhEr4U208h4HYySCXtftvvNov2_VogVTcvmE2o8qhA&client_id=733249279899-44tchle2kaa9afr5v9ov7jbuojfr9lrq.apps.googleusercontent.com&origin=https%3A%2F%2Fhome.nest.com&scope=openid%20profile%20email%20https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fnest-account&ss_domain=https%3A%2F%2Fhome.nest.com",
+                "cookies": "__Secure-3PSID=5QepBdFj_VdRC86pVv5wqqH0GWcK3Gh3BkMl2ZcRLmAmkHnFNFZHlalhlxQtOMx-mGM9Ig.; __Secure-3PAPISID=PHnAbBpUsgRK-FRN/AToAb325U3qoGL5OG; NID=206=RLdBrCjys-ymBXTkhPxOMV5PiQ1XRL7VjuHOwXWrBuyz9eQwSSKhSYHRU211bgKXE2eXxZiuPfBAyad6KzWT8CjvTFPF0IScKUiwRxKe9Jltrbb4pi-PvMM9OjmP017z7s6D4Sn8Tbl40leKhjhzWGisqH94n4U8-LNjLqe_qVnITpQT-y_Etyg; __Host-3PLSID=s.youtube:5QepBXTpdDiXWWhn8y-97A6WJiUuMPiCukHodSiA74ToejCA9Y-FHB7SmDBCNHQHg_XC3A.; LSOLH=_SVI_Ch8weTZmNUZ2bkxzc2E0TlVzdFhaOFlFaUdmc0JWYXhjEP7K-fvG9u0CIj9NQUVESGZfcW9pLW9wUzFsaUxvYTFXSEJBSml6Wkl4VzlrR2E0eEpMLWhQdndCcktBZlJJdGdwMWhrTm1FcU0_:26822689:4fda; __Secure-3PSIDCC=AJi4QfEjj0pkpLwGWPYjNqLQqqiIdljYjWHsXWahVMcskoL56gX4zs3a_XVVrtSn09DZvIeJ",
+                "apiKey": "AIzaSyAdkSIMNc51XGNEAYWasX9UOWkS5P6sZE4"
+            },
+            "platform": "Nest"
+        },
+        {
+            "mqtt": {
+                "base_topic": "zigbee2mqtt",
+                "server": "mqtt://pi.brooks.haus:1883",
+                "reject_unauthorized": false,
+                "keepalive": 60,
+                "version": 5
+            },
+            "platform": "zigbee2mqtt"
+        },
+        {
+            "controllers": [
+                {
+                    "address": "192.168.1.9",
+                    "doorbellMessages": [
+                        {
+                            "duration": 60,
+                            "message": "I'll be there soon!"
+                        },
+                        {
+                            "duration": 60,
+                            "message": "Leave it by the door."
+                        }
+                    ],
+                    "password": "Homebridge123!",
+                    "username": "homebridge"
+                }
+            ],
+            "platform": "UniFi Protect"
+        }
+    ]
+}

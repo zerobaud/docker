@@ -1,0 +1,110 @@
+version: "3"
+
+services:
+    
+    watchtower:
+        container_name: watchtower
+        restart: always
+        image: containrrr/watchtower
+        volumes:
+            - /var/run/docker.sock:/var/run/docker.sock
+        command: --schedule "0 0 6 * * *" --cleanup
+        environment:
+            - TZ
+    
+    portainer:
+        container_name: portainer
+        hostname: portainer
+        image: portainer/portainer-ce
+        restart: always
+        command: -H unix:///var/run/docker.sock
+        volumes:
+            - /var/run/docker.sock:/var/run/docker.sock
+            - portainer_data:/data
+        environment:
+            - TZ
+            - PUID
+            - PGID
+        ports:
+            - 9000:9000
+    
+    pihole:
+        container_name: pihole
+        hostname: pihole
+        image: pihole/pihole:latest
+        restart: unless-stopped
+        volumes:
+            - pihole_data:/etc/pihole/
+            - pihole_dnsmasq:/etc/dnsmasq.d/
+        environment:
+            - TZ
+        ports:
+            - 53:53/tcp
+            - 53:53/udp
+            - 67:67/udp
+            - 80:80/tcp
+            - 443:443/tcp
+        cap_add:
+            - NET_ADMIN
+    
+    mosquitto:
+        container_name: mosquitto
+        hostname: mosquitto
+        image: eclipse-mosquitto:1.6.13
+        restart: always
+        volumes:
+            -  ./conf/mosquitto.conf:/mosquitto/config/mosquitto.conf
+            - mosquitto_data:/mosquitto/data
+            - mosquitto_log:/mosquitto/log
+        environment:
+            - TZ
+            - PUID
+            - PGID
+        ports:
+            - 1883:1883
+            - 9001:9001
+
+    zigbee2mqtt:
+        container_name: zigbee2mqtt
+        hostname: zigbee2mqtt
+        image: koenkk/zigbee2mqtt
+        restart: always
+        depends_on:
+            - "mosquitto"
+        volumes:
+            - zigbee2mqtt_data:/app/data
+            - /run/udev:/run/udev:ro
+        devices:
+            - /dev/ttyACM0:/dev/ttyACM0
+        environment:
+            - TZ
+            - PUID
+            - PGID
+        ports:
+            - 8080:8080
+        privileged: true
+
+    homebridge:
+        container_name: homebridge
+        hostname: homebridge
+        image: oznu/homebridge
+        restart: always
+        network_mode: host
+        volumes:
+            - homebridge_data:/homebridge
+            - ./conf/config.json:/homebridge/config.json
+        environment:
+            - TZ
+            - PUID
+            - PGID
+            - HOMEBRIDGE_CONFIG_UI=1
+            - HOMEBRIDGE_CONFIG_UI_PORT:8180
+
+volumes:
+    portainer_data:
+    mosquitto_data:
+    mosquitto_log:
+    zigbee2mqtt_data:
+    homebridge_data:
+    pihole_data:
+    pihole_dnsmasq:
