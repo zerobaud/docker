@@ -116,7 +116,7 @@ services:
     #  - 8200:8200
     volumes:
       - ${DOCKER_LOCATION}/duplicati:/config
-      - /home:/source
+      - /mnt/tank/home:/source
     environment:
       - PUID
       - PGID
