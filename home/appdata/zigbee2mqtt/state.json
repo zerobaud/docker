@@ -1,0 +1,32 @@
+{
+    "0x000d6ffffefc849c": {
+        "brightness": 13,
+        "state": "OFF"
+    },
+    "0xb0ce18140008d8ba": {
+        "brightness": 8,
+        "state": "OFF",
+        "color_temp": 370,
+        "color": {
+            "x": 0.4599,
+            "y": 0.4106,
+            "saturation": 82,
+            "hue": 32
+        },
+        "update": {
+            "state": "idle"
+        },
+        "update_available": false,
+        "color_mode": "color_temp"
+    },
+    "0xcc86ecfffed1a7ce": {
+        "occupancy": false,
+        "tamper": false,
+        "battery_low": false
+    },
+    "0xb0ce1814036247e6": {
+        "state": "OFF",
+        "energy": 0,
+        "power": 0
+    }
+}

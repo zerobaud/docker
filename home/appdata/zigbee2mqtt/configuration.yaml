@@ -1,0 +1,29 @@
+homeassistant: false
+permit_join: true
+mqtt:
+  base_topic: zigbee2mqtt
+  server: 'mqtt://mosquitto:1883'
+  keepalive: 60
+  reject_unauthorized: true
+  version: 5
+serial:
+  port: /dev/ttyACM0
+frontend:
+  port: 8080
+advanced:
+  channel: 18
+  log_level: info
+  last_seen: ISO_8601_local
+  availability_timeout: 60
+experimental:
+  output: json
+devices:
+  '0x000d6ffffefc849c':
+    friendly_name: Fireplace Dimmer
+  '0xb0ce18140008d8ba':
+    friendly_name: Plant Light
+  '0xcc86ecfffed1a7ce':
+    friendly_name: MBR Closet Sensor
+  '0xb0ce1814036247e6':
+    friendly_name: MBR Closet Plug
+groups: {}

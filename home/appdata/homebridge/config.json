@@ -33,10 +33,14 @@
         {
             "mqtt": {
                 "base_topic": "zigbee2mqtt",
-                "server": "mqtt://pi.brooks.haus:1883",
+                "server": "mqtt://mosquitto.srv.brooks.haus:1883",
                 "reject_unauthorized": false,
                 "keepalive": 60,
-                "version": 5
+                "version": 5,
+                "disable_qos": false
+            },
+            "defaults": {
+                "exclude": false
             },
             "platform": "zigbee2mqtt"
         },
@@ -60,5 +64,6 @@
             ],
             "platform": "UniFi Protect"
         }
-    ]
+    ],
+    "disabledPlugins": []
 }
